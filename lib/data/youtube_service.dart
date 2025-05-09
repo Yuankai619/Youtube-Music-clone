@@ -1,10 +1,12 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/song_model.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class YouTubeService {
   // Replace with your actual API key
-  static const String API_KEY = 'AIzaSyDR8ePcyJYoHIjHtJJ8gV1VC_oCO2BQlu0';
+  final String API_KEY = dotenv.env['YOUTUBE_API_KEY']!;
+
   static const String BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
   Future<List<Song>> searchSongs(String query) async {
