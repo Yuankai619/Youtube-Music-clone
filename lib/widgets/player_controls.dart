@@ -158,11 +158,11 @@ class PlayerControls extends StatelessWidget {
               child: Row(
                 children: [
                   // Random song button
-                  IconButton(
-                    icon: const Icon(Icons.shuffle_on, size: 24),
-                    onPressed: viewModel.playRandomSong,
-                    tooltip: 'Play random song',
-                  ),
+                  // IconButton(
+                  //   icon: const Icon(Icons.shuffle_on, size: 24),
+                  //   onPressed: viewModel.playRandomSong,
+                  //   tooltip: 'Play random song',
+                  // ),
 
                   // Volume control
                   const Icon(Icons.volume_down, size: 20),
@@ -177,15 +177,15 @@ class PlayerControls extends StatelessWidget {
                   const Icon(Icons.volume_up, size: 20),
 
                   // Lyrics button
-                  IconButton(
-                    icon: const Icon(Icons.lyrics, size: 24),
-                    onPressed: viewModel.toggleLyricsState,
-                    tooltip: 'Show lyrics',
-                    color:
-                        viewModel.lyricsState == LyricsState.fullscreen
-                            ? Theme.of(context).colorScheme.secondary
-                            : Colors.white,
-                  ),
+                  // IconButton(
+                  //   icon: const Icon(Icons.lyrics, size: 24),
+                  //   onPressed: viewModel.toggleLyricsState,
+                  //   tooltip: 'Show lyrics',
+                  //   color:
+                  //       viewModel.lyricsState == LyricsState.fullscreen
+                  //           ? Theme.of(context).colorScheme.secondary
+                  //           : Colors.white,
+                  // ),
                 ],
               ),
             ),

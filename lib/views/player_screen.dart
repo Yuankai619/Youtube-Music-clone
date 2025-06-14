@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/player_viewmodel.dart';
 import '../widgets/album_art.dart';
-import '../widgets/lyrics_view.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/search_bar.dart';
 import 'playlist_view.dart';
@@ -208,67 +207,57 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
         // Album art and song info
         Expanded(
-          child:
-              viewModel.lyricsState == LyricsState.fullscreen
-                  ? LyricsView(song: currentSong, fullscreen: true)
-                  : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(),
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          AlbumArt(imageUrl: currentSong.albumArt),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  AlbumArt(imageUrl: currentSong.albumArt),
 
-                          // Show loading indicator over album art if buffering
-                          if (viewModel.isBuffering)
-                            Container(
-                              width: MediaQuery.of(context).size.width * 0.7,
-                              height: MediaQuery.of(context).size.width * 0.7,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            ),
-                        ],
+                  // Show loading indicator over album art if buffering
+                  if (viewModel.isBuffering)
+                    Container(
+                      width: MediaQuery.of(context).size.width * 0.7,
+                      height: MediaQuery.of(context).size.width * 0.7,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(height: 24),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Column(
-                          children: [
-                            Text(
-                              currentSong.title,
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${currentSong.artist} • ${currentSong.album}',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[400],
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  children: [
+                    Text(
+                      currentSong.title,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const Spacer(),
-                      if (viewModel.lyricsState == LyricsState.fullscreen)
-                        LyricsView(song: currentSong, fullscreen: false),
-                    ],
-                  ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${currentSong.artist} • ${currentSong.album}',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+            ],
+          ),
         ),
 
         // Player controls
@@ -369,7 +358,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 Container(
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(3),
-                                    color: Colors.black.withOpacity(0.5),
+                                    color: Colors.black.withValues(alpha: 0.5),
                                   ),
                                   child: const Center(
                                     child: SizedBox(

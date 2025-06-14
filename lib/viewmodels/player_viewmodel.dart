@@ -5,7 +5,6 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song_model.dart';
 import '../data/youtube_service.dart';
-import '../data/lyrics_service.dart';
 
 enum RepeatMode { off, all, one }
 
@@ -15,7 +14,6 @@ class PlayerViewModel extends ChangeNotifier {
   final YouTubeService _youtubeService = YouTubeService();
   final AudioPlayer _audioPlayer = AudioPlayer();
   final YoutubeExplode _yt = YoutubeExplode();
-  final LyricsService _lyricsService = LyricsService();
 
   List<Song> _songs = [];
   List<Song> _searchResults = [];
@@ -25,14 +23,8 @@ class PlayerViewModel extends ChangeNotifier {
   bool _isBuffering = false;
   RepeatMode _repeatMode = RepeatMode.off;
   bool _isShuffleEnabled = false;
-  LyricsState _lyricsState = LyricsState.hidden;
   String _searchQuery = '';
   String _errorMessage = '';
-
-  List<LyricLine> _lyrics = [];
-  bool _isLoadingLyrics = false;
-  bool _lyricsNotFound = false;
-  int _currentLyricIndex = -1;
 
   // Getters
   List<Song> get songs => _songs;
@@ -43,16 +35,9 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isBuffering => _isBuffering;
   RepeatMode get repeatMode => _repeatMode;
   bool get isShuffleEnabled => _isShuffleEnabled;
-  LyricsState get lyricsState => _lyricsState;
   AudioPlayer get audioPlayer => _audioPlayer;
   String get searchQuery => _searchQuery;
   String get errorMessage => _errorMessage;
-
-  // Additional getters for lyrics
-  List<LyricLine> get lyrics => _lyrics;
-  bool get isLoadingLyrics => _isLoadingLyrics;
-  bool get lyricsNotFound => _lyricsNotFound;
-  int get currentLyricIndex => _currentLyricIndex;
 
   PlayerViewModel() {
     _initAudioPlayer();
@@ -73,7 +58,6 @@ class PlayerViewModel extends ChangeNotifier {
     });
 
     _audioPlayer.positionStream.listen((position) {
-      _updateCurrentLyricIndex(position);
       notifyListeners();
     });
 
@@ -85,35 +69,6 @@ class PlayerViewModel extends ChangeNotifier {
         notifyListeners();
       },
     );
-  }
-
-  // Update the current lyric index based on playback position
-  void _updateCurrentLyricIndex(Duration position) {
-    if (_lyrics.isEmpty) return;
-
-    for (int i = 0; i < _lyrics.length; i++) {
-      final lyric = _lyrics[i];
-      final nextLyricTimestamp =
-          i < _lyrics.length - 1
-              ? _lyrics[i + 1].timestamp
-              : Duration(
-                milliseconds: _audioPlayer.duration?.inMilliseconds ?? 0,
-              );
-
-      if (position >= lyric.timestamp && position < nextLyricTimestamp) {
-        if (_currentLyricIndex != i) {
-          _currentLyricIndex = i;
-          notifyListeners();
-        }
-        return;
-      }
-    }
-
-    // If we're before the first lyric
-    if (position < _lyrics.first.timestamp && _currentLyricIndex != -1) {
-      _currentLyricIndex = -1;
-      notifyListeners();
-    }
   }
 
   Future<void> searchSongs(String query) async {
@@ -132,31 +87,6 @@ class PlayerViewModel extends ChangeNotifier {
     } catch (e) {
       print('Search error: $e');
       _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> fetchLyrics() async {
-    if (_currentSong == null) return;
-
-    _isLoadingLyrics = true;
-    _lyricsNotFound = false;
-    _lyrics = [];
-    _currentLyricIndex = -1;
-    notifyListeners();
-
-    try {
-      final fetchedLyrics = await _lyricsService.fetchLyrics(_currentSong!);
-      _lyrics = fetchedLyrics;
-      _lyricsNotFound = fetchedLyrics.isEmpty;
-
-      // Update the current lyric index based on current position
-      _updateCurrentLyricIndex(_audioPlayer.position);
-    } catch (e) {
-      print('Error fetching lyrics: $e');
-      _lyricsNotFound = true;
-    } finally {
-      _isLoadingLyrics = false;
       notifyListeners();
     }
   }
@@ -230,9 +160,6 @@ class PlayerViewModel extends ChangeNotifier {
             print("Playing audio");
             await _audioPlayer.play();
             _isPlaying = true;
-
-            // After successfully setting up playback, fetch lyrics
-            fetchLyrics();
           } else {
             throw Exception("No audio stream available for this video");
           }
@@ -408,19 +335,6 @@ class PlayerViewModel extends ChangeNotifier {
       case RepeatMode.one:
         _repeatMode = RepeatMode.off;
         break;
-    }
-    notifyListeners();
-  }
-
-  void toggleLyricsState() {
-    if (_lyricsState == LyricsState.hidden) {
-      _lyricsState = LyricsState.fullscreen;
-      // Fetch lyrics if not already loaded
-      if (_lyrics.isEmpty && !_isLoadingLyrics && !_lyricsNotFound) {
-        fetchLyrics();
-      }
-    } else {
-      _lyricsState = LyricsState.hidden;
     }
     notifyListeners();
   }

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../viewmodels/player_viewmodel.dart';
 
 class PlaylistView extends StatelessWidget {
-  const PlaylistView({Key? key}) : super(key: key);
+  const PlaylistView({super.key});
 
   @override
   Widget build(BuildContext context) {
