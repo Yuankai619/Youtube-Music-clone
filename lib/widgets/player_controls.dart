@@ -12,8 +12,10 @@ class PlayerControls extends StatelessWidget {
         final duration = viewModel.audioPlayer.duration ?? Duration.zero;
         final position = viewModel.audioPlayer.position;
 
+        final bool hasCurrentSong = viewModel.currentSong != null;
         final bool hasSongs = viewModel.songs.isNotEmpty;
-        final bool isProcessing = viewModel.isLoading || viewModel.isBuffering;
+        final bool isProcessing = viewModel.isLoading;
+        final bool isBuffering = viewModel.isBuffering;
 
         return Column(
           children: [
@@ -49,9 +51,14 @@ class PlayerControls extends StatelessWidget {
                           duration.inMilliseconds.toDouble() == 0
                               ? 1
                               : duration.inMilliseconds.toDouble(),
-                      onChanged: (value) {
-                        viewModel.seekTo(Duration(milliseconds: value.toInt()));
-                      },
+                      onChanged:
+                          hasCurrentSong
+                              ? (value) {
+                                viewModel.seekTo(
+                                  Duration(milliseconds: value.toInt()),
+                                );
+                              }
+                              : null,
                       activeColor: Theme.of(context).colorScheme.secondary,
                     ),
                   ),
@@ -83,7 +90,8 @@ class PlayerControls extends StatelessWidget {
                 IconButton(
                   iconSize: 32,
                   icon: const Icon(Icons.skip_previous),
-                  onPressed: hasSongs ? viewModel.playPreviousSong : null,
+                  onPressed:
+                      hasSongs && hasSongs ? viewModel.playPreviousSong : null,
                 ).opacity(hasSongs ? 1.0 : 0.5),
 
                 // Play/Pause/Loading button
@@ -93,7 +101,7 @@ class PlayerControls extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color:
-                        isProcessing || !hasSongs
+                        isProcessing || !hasCurrentSong
                             ? Theme.of(
                               context,
                             ).colorScheme.secondary.withValues(alpha: 0.5)
@@ -113,6 +121,29 @@ class PlayerControls extends StatelessWidget {
                               ),
                             ),
                           )
+                          : isBuffering
+                          ? Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                viewModel.isPlaying
+                                    ? Icons.pause
+                                    : Icons.play_arrow,
+                                color: Colors.white.withValues(alpha: 0.7),
+                                size: 32,
+                              ),
+                              const SizedBox(
+                                width: 40,
+                                height: 40,
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ],
+                          )
                           : IconButton(
                             iconSize: 32,
                             icon: Icon(
@@ -122,7 +153,14 @@ class PlayerControls extends StatelessWidget {
                               color: Colors.white,
                             ),
                             onPressed:
-                                hasSongs ? viewModel.togglePlayPause : null,
+                                hasCurrentSong
+                                    ? () {
+                                      print(
+                                        'Play/Pause button pressed. Current state: ${viewModel.isPlaying}, HasCurrentSong: $hasCurrentSong',
+                                      );
+                                      viewModel.togglePlayPause();
+                                    }
+                                    : null,
                           ),
                 ),
 

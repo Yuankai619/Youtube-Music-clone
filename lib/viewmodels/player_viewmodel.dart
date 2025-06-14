@@ -45,16 +45,28 @@ class PlayerViewModel extends ChangeNotifier {
 
   void _initAudioPlayer() {
     _audioPlayer.playerStateStream.listen((playerState) {
+      final wasPlaying = _isPlaying;
+      final wasBuffering = _isBuffering;
+      final wasLoading = _isLoading;
+
       _isPlaying = playerState.playing;
-      _isBuffering =
-          playerState.processingState == ProcessingState.buffering ||
-          playerState.processingState == ProcessingState.loading;
+      _isBuffering = playerState.processingState == ProcessingState.buffering;
+
+      // Only set loading to false when we're actually ready to play
+      if (playerState.processingState == ProcessingState.ready && _isLoading) {
+        _isLoading = false;
+      }
 
       if (playerState.processingState == ProcessingState.completed) {
         playNextSong();
       }
 
-      notifyListeners();
+      // Notify if any state changed
+      if (wasPlaying != _isPlaying ||
+          wasBuffering != _isBuffering ||
+          wasLoading != _isLoading) {
+        notifyListeners();
+      }
     });
 
     _audioPlayer.positionStream.listen((position) {
@@ -66,6 +78,8 @@ class PlayerViewModel extends ChangeNotifier {
       onError: (Object e, StackTrace st) {
         print('Audio player error: $e');
         _errorMessage = 'Playback error: ${e.toString()}';
+        _isLoading = false; // Make sure to reset loading state on error
+        _isBuffering = false;
         notifyListeners();
       },
     );
@@ -95,6 +109,11 @@ class PlayerViewModel extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = '';
     _currentSong = song;
+
+    // Add song to playlist if it's not already there
+    if (!_songs.any((s) => s.id == song.id)) {
+      _songs.add(song);
+    }
 
     // Clear search results when playing a song
     _clearSearchResults();
@@ -159,7 +178,9 @@ class PlayerViewModel extends ChangeNotifier {
 
             print("Playing audio");
             await _audioPlayer.play();
-            _isPlaying = true;
+
+            // Don't set _isPlaying here, let the stream handle it
+            // The loading state will be managed by the playerStateStream
           } else {
             throw Exception("No audio stream available for this video");
           }
@@ -167,6 +188,8 @@ class PlayerViewModel extends ChangeNotifier {
           print('Error playing YouTube video: $e');
           _errorMessage = 'Failed to play video: ${e.toString()}';
           _isPlaying = false;
+          _isLoading = false;
+          _isBuffering = false;
         }
       }
       // For direct audio URLs (if any)
@@ -184,18 +207,18 @@ class PlayerViewModel extends ChangeNotifier {
           ),
         );
 
-        _audioPlayer.play();
-        _isPlaying = true;
+        await _audioPlayer.play();
+        // Don't manually set states, let the stream handle it
       }
     } catch (e) {
       print("Error playing song: $e");
       _errorMessage = 'Playback error: ${e.toString()}';
       _isPlaying = false;
-    } finally {
-      _isLoading = false; // Ensure loading state is reset
-      _isBuffering = false; // Reset buffering state as well
-      notifyListeners();
+      _isLoading = false;
+      _isBuffering = false;
     }
+    // Remove the finally block that was forcing states
+    notifyListeners();
   }
 
   void _clearSearchResults() {
@@ -293,20 +316,32 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   // Improve the togglePlayPause method to handle loading state
-  void togglePlayPause() {
+  Future<void> togglePlayPause() async {
     if (_currentSong == null) return;
 
-    // Don't allow toggle if still loading
-    if (_isLoading || _isBuffering) return;
-
-    if (_isPlaying) {
-      _audioPlayer.pause();
-    } else {
-      _audioPlayer.play();
+    // Don't allow toggle if still loading the initial song
+    if (_isLoading) {
+      print('Cannot toggle play/pause while loading');
+      return;
     }
 
-    _isPlaying = !_isPlaying;
-    notifyListeners();
+    try {
+      if (_isPlaying) {
+        print('Pausing audio');
+        await _audioPlayer.pause();
+      } else {
+        print('Resuming audio');
+        await _audioPlayer.play();
+      }
+
+      // Force a notification to ensure UI updates immediately
+      // The stream listener will handle the final state update
+      notifyListeners();
+    } catch (e) {
+      print('Error toggling play/pause: $e');
+      _errorMessage = 'Playback control error: ${e.toString()}';
+      notifyListeners();
+    }
   }
 
   void setVolume(double volume) {
