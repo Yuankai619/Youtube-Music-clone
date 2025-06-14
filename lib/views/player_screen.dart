@@ -207,56 +207,58 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
         // Album art and song info
         Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  AlbumArt(imageUrl: currentSong.albumArt),
-
-                  // Show loading indicator over album art if buffering
-                  if (viewModel.isBuffering)
-                    Container(
-                      width: MediaQuery.of(context).size.width * 0.7,
-                      height: MediaQuery.of(context).size.width * 0.7,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20),
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text(
-                      currentSong.title,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                    AlbumArt(imageUrl: currentSong.albumArt),
+
+                    // Show loading indicator over album art if buffering
+                    if (viewModel.isBuffering)
+                      Container(
+                        width: MediaQuery.of(context).size.width * 0.7,
+                        height: MediaQuery.of(context).size.width * 0.7,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(child: CircularProgressIndicator()),
                       ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${currentSong.artist} • ${currentSong.album}',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[400]),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
                 ),
-              ),
-              const Spacer(),
-            ],
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        currentSong.title,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${currentSong.artist} • ${currentSong.album}',
+                        style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
 

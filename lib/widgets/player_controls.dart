@@ -9,8 +9,9 @@ class PlayerControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<PlayerViewModel>(
       builder: (context, viewModel, _) {
-        final duration = viewModel.audioPlayer.duration ?? Duration.zero;
-        final position = viewModel.audioPlayer.position;
+        final audioHandler = viewModel.audioPlayer;
+        final duration = audioHandler.duration ?? Duration.zero;
+        final position = audioHandler.position;
 
         final bool hasCurrentSong = viewModel.currentSong != null;
         final bool hasSongs = viewModel.songs.isNotEmpty;
@@ -41,18 +42,19 @@ class PlayerControls extends StatelessWidget {
                   ),
                   Expanded(
                     child: Slider(
-                      value: position.inMilliseconds.toDouble().clamp(
-                        0,
-                        duration.inMilliseconds.toDouble() == 0
-                            ? 1
-                            : duration.inMilliseconds.toDouble(),
-                      ),
+                      value:
+                          duration.inMilliseconds > 0
+                              ? position.inMilliseconds.toDouble().clamp(
+                                0.0,
+                                duration.inMilliseconds.toDouble(),
+                              )
+                              : 0.0,
                       max:
-                          duration.inMilliseconds.toDouble() == 0
-                              ? 1
-                              : duration.inMilliseconds.toDouble(),
+                          duration.inMilliseconds > 0
+                              ? duration.inMilliseconds.toDouble()
+                              : 1.0,
                       onChanged:
-                          hasCurrentSong
+                          hasCurrentSong && duration.inMilliseconds > 0
                               ? (value) {
                                 viewModel.seekTo(
                                   Duration(milliseconds: value.toInt()),
@@ -60,6 +62,7 @@ class PlayerControls extends StatelessWidget {
                               }
                               : null,
                       activeColor: Theme.of(context).colorScheme.secondary,
+                      inactiveColor: Colors.grey[600],
                     ),
                   ),
                   Text(

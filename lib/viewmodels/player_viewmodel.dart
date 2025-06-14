@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song_model.dart';
 import '../data/youtube_service.dart';
+import '../main.dart';
+import '../services/audio_handler.dart';
 
 enum RepeatMode { off, all, one }
 
@@ -12,7 +14,6 @@ enum LyricsState { hidden, fullscreen }
 
 class PlayerViewModel extends ChangeNotifier {
   final YouTubeService _youtubeService = YouTubeService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
   final YoutubeExplode _yt = YoutubeExplode();
 
   List<Song> _songs = [];
@@ -26,6 +27,11 @@ class PlayerViewModel extends ChangeNotifier {
   String _searchQuery = '';
   String _errorMessage = '';
 
+  // Stream subscriptions
+  late StreamSubscription _playbackStateSubscription;
+  late StreamSubscription _mediaItemSubscription;
+  late StreamSubscription _positionSubscription;
+
   // Getters
   List<Song> get songs => _songs;
   List<Song> get searchResults => _searchResults;
@@ -35,29 +41,30 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isBuffering => _isBuffering;
   RepeatMode get repeatMode => _repeatMode;
   bool get isShuffleEnabled => _isShuffleEnabled;
-  AudioPlayer get audioPlayer => _audioPlayer;
+  // For compatibility with existing code - return the audio handler
+  MyAudioHandler get audioPlayer => audioHandler as MyAudioHandler;
   String get searchQuery => _searchQuery;
   String get errorMessage => _errorMessage;
 
   PlayerViewModel() {
-    _initAudioPlayer();
+    _initAudioHandler();
   }
 
-  void _initAudioPlayer() {
-    _audioPlayer.playerStateStream.listen((playerState) {
+  void _initAudioHandler() {
+    _playbackStateSubscription = audioHandler.playbackState.listen((
+      playbackState,
+    ) {
       final wasPlaying = _isPlaying;
       final wasBuffering = _isBuffering;
       final wasLoading = _isLoading;
 
-      _isPlaying = playerState.playing;
-      _isBuffering = playerState.processingState == ProcessingState.buffering;
+      _isPlaying = playbackState.playing;
+      _isBuffering =
+          playbackState.processingState == AudioProcessingState.buffering;
+      _isLoading =
+          playbackState.processingState == AudioProcessingState.loading;
 
-      // Only set loading to false when we're actually ready to play
-      if (playerState.processingState == ProcessingState.ready && _isLoading) {
-        _isLoading = false;
-      }
-
-      if (playerState.processingState == ProcessingState.completed) {
+      if (playbackState.processingState == AudioProcessingState.completed) {
         playNextSong();
       }
 
@@ -69,20 +76,37 @@ class PlayerViewModel extends ChangeNotifier {
       }
     });
 
-    _audioPlayer.positionStream.listen((position) {
-      notifyListeners();
+    _mediaItemSubscription = audioHandler.mediaItem.listen((mediaItem) {
+      if (mediaItem != null) {
+        // Find the corresponding song in our playlist
+        final song = _songs.firstWhere(
+          (s) => s.id == mediaItem.id,
+          orElse:
+              () => Song(
+                id: mediaItem.id,
+                title: mediaItem.title,
+                artist: mediaItem.artist ?? 'Unknown Artist',
+                album: mediaItem.album ?? 'Unknown Album',
+                albumArt: mediaItem.artUri?.toString() ?? '',
+                previewUrl: '',
+                videoId: mediaItem.extras?['videoId'] ?? '',
+                duration: mediaItem.duration ?? Duration.zero,
+              ),
+        );
+
+        if (_currentSong?.id != song.id) {
+          _currentSong = song;
+          notifyListeners();
+        }
+      }
     });
 
-    _audioPlayer.playbackEventStream.listen(
-      (_) {},
-      onError: (Object e, StackTrace st) {
-        print('Audio player error: $e');
-        _errorMessage = 'Playback error: ${e.toString()}';
-        _isLoading = false; // Make sure to reset loading state on error
-        _isBuffering = false;
-        notifyListeners();
-      },
-    );
+    // Listen to position changes from AudioHandler
+    final handler = audioHandler as MyAudioHandler;
+    _positionSubscription = handler.positionStream.listen((position) {
+      // Only notify listeners to update the UI with new position
+      notifyListeners();
+    });
   }
 
   Future<void> searchSongs(String query) async {
@@ -143,18 +167,17 @@ class PlayerViewModel extends ChangeNotifier {
 
             final audioStream =
                 compatibleStreams.isNotEmpty
-                    ? compatibleStreams
-                        .first // Use mp4a if available
-                    : audioOnlyStreams
-                        .withHighestBitrate(); // Fallback to highest bitrate
+                    ? compatibleStreams.first
+                    : audioOnlyStreams.withHighestBitrate();
 
             print(
               "Selected audio format: ${audioStream.codec}, bitrate: ${audioStream.bitrate}, container: ${audioStream.container}",
             );
 
             final audioUrl = audioStream.url.toString();
+            print("Audio URL: $audioUrl");
 
-            // Create appropriate MediaItem for the background audio service
+            // Create MediaItem for AudioService
             final mediaItem = MediaItem(
               id: song.id,
               title: song.title,
@@ -165,22 +188,27 @@ class PlayerViewModel extends ChangeNotifier {
               displayTitle: song.title,
               displaySubtitle: song.artist,
               displayDescription: song.album,
+              extras: {
+                'url': audioUrl,
+                'videoId': song.videoId,
+                'source': 'youtube',
+              },
             );
 
-            // Try to load and play the audio
-            await _audioPlayer.stop(); // Stop any current playback
-
-            print("Setting audio source URL: $audioUrl");
-            await _audioPlayer.setAudioSource(
-              AudioSource.uri(Uri.parse(audioUrl), tag: mediaItem),
-              preload: true,
+            print(
+              "Created MediaItem: ${mediaItem.title} by ${mediaItem.artist}",
             );
 
-            print("Playing audio");
-            await _audioPlayer.play();
+            // Stop current playback and add new song
+            await audioHandler.stop();
 
-            // Don't set _isPlaying here, let the stream handle it
-            // The loading state will be managed by the playerStateStream
+            // Add the new song to queue
+            await audioHandler.addQueueItem(mediaItem);
+
+            // Start playback
+            await audioHandler.play();
+
+            print("Successfully started playback for: ${song.title}");
           } else {
             throw Exception("No audio stream available for this video");
           }
@@ -190,25 +218,24 @@ class PlayerViewModel extends ChangeNotifier {
           _isPlaying = false;
           _isLoading = false;
           _isBuffering = false;
+          notifyListeners();
         }
       }
       // For direct audio URLs (if any)
       else if (song.previewUrl.isNotEmpty) {
-        await _audioPlayer.setAudioSource(
-          AudioSource.uri(
-            Uri.parse(song.previewUrl),
-            tag: MediaItem(
-              id: song.id,
-              title: song.title,
-              artist: song.artist,
-              album: song.album,
-              artUri: Uri.parse(song.albumArt),
-            ),
-          ),
+        final mediaItem = MediaItem(
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          album: song.album,
+          artUri: Uri.parse(song.albumArt),
+          duration: song.duration,
+          extras: {'url': song.previewUrl},
         );
 
-        await _audioPlayer.play();
-        // Don't manually set states, let the stream handle it
+        await audioHandler.stop();
+        await audioHandler.addQueueItem(mediaItem);
+        await audioHandler.play();
       }
     } catch (e) {
       print("Error playing song: $e");
@@ -216,9 +243,8 @@ class PlayerViewModel extends ChangeNotifier {
       _isPlaying = false;
       _isLoading = false;
       _isBuffering = false;
+      notifyListeners();
     }
-    // Remove the finally block that was forcing states
-    notifyListeners();
   }
 
   void _clearSearchResults() {
@@ -245,7 +271,7 @@ class PlayerViewModel extends ChangeNotifier {
         playNextSong();
       } else {
         _currentSong = null;
-        _audioPlayer.stop();
+        audioHandler.stop();
         _isPlaying = false;
       }
     }
@@ -256,7 +282,7 @@ class PlayerViewModel extends ChangeNotifier {
   void clearPlaylist() {
     _songs = [];
     _currentSong = null;
-    _audioPlayer.stop();
+    audioHandler.stop();
     _isPlaying = false;
     notifyListeners();
   }
@@ -275,8 +301,8 @@ class PlayerViewModel extends ChangeNotifier {
     if (_repeatMode == RepeatMode.one) {
       // For repeat one, restart the current song
       nextIndex = currentIndex;
-      await _audioPlayer.seek(Duration.zero);
-      await _audioPlayer.play();
+      await audioHandler.seek(Duration.zero);
+      await audioHandler.play();
       return;
     } else if (_isShuffleEnabled) {
       // For shuffle mode, pick a random song that's not the current one
@@ -297,7 +323,7 @@ class PlayerViewModel extends ChangeNotifier {
       if (nextIndex == 0 &&
           _repeatMode == RepeatMode.off &&
           currentIndex == _songs.length - 1) {
-        _audioPlayer.stop();
+        audioHandler.stop();
         _isPlaying = false;
         notifyListeners();
         return;
@@ -319,7 +345,6 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> togglePlayPause() async {
     if (_currentSong == null) return;
 
-    // Don't allow toggle if still loading the initial song
     if (_isLoading) {
       print('Cannot toggle play/pause while loading');
       return;
@@ -328,34 +353,36 @@ class PlayerViewModel extends ChangeNotifier {
     try {
       if (_isPlaying) {
         print('Pausing audio');
-        await _audioPlayer.pause();
+        await audioHandler.pause();
       } else {
         print('Resuming audio');
-        await _audioPlayer.play();
+        await audioHandler.play();
       }
-
-      // Force a notification to ensure UI updates immediately
-      // The stream listener will handle the final state update
-      notifyListeners();
     } catch (e) {
       print('Error toggling play/pause: $e');
-      _errorMessage = 'Playback control error: ${e.toString()}';
+      _errorMessage = 'Playbook control error: ${e.toString()}';
       notifyListeners();
     }
   }
 
   void setVolume(double volume) {
-    _audioPlayer.setVolume(volume);
+    final handler = audioHandler as MyAudioHandler;
+    handler.setVolume(volume);
     notifyListeners();
   }
 
   void seekTo(Duration position) {
-    _audioPlayer.seek(position);
+    audioHandler.seek(position);
     notifyListeners();
   }
 
   void toggleShuffleMode() {
     _isShuffleEnabled = !_isShuffleEnabled;
+    audioHandler.setShuffleMode(
+      _isShuffleEnabled
+          ? AudioServiceShuffleMode.all
+          : AudioServiceShuffleMode.none,
+    );
     notifyListeners();
   }
 
@@ -363,59 +390,28 @@ class PlayerViewModel extends ChangeNotifier {
     switch (_repeatMode) {
       case RepeatMode.off:
         _repeatMode = RepeatMode.all;
+        audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
         break;
       case RepeatMode.all:
         _repeatMode = RepeatMode.one;
+        audioHandler.setRepeatMode(AudioServiceRepeatMode.one);
         break;
       case RepeatMode.one:
         _repeatMode = RepeatMode.off;
+        audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
         break;
     }
     notifyListeners();
+  }
+
+  Future<void> playPreviousSong() async {
+    await audioHandler.skipToPrevious();
   }
 
   // Public method to clear search results
   void clearSearchResults() {
     _searchResults = [];
     notifyListeners();
-  }
-
-  // Add this missing method for previous song functionality
-  Future<void> playPreviousSong() async {
-    if (_songs.isEmpty || _currentSong == null) return;
-
-    int currentIndex = _songs.indexWhere((song) => song.id == _currentSong!.id);
-
-    if (currentIndex == -1) return;
-
-    // If current position is more than 3 seconds, restart current song
-    if (_audioPlayer.position.inSeconds > 3) {
-      await _audioPlayer.seek(Duration.zero);
-      return;
-    }
-
-    int prevIndex;
-
-    if (_repeatMode == RepeatMode.one) {
-      prevIndex = currentIndex;
-    } else if (_isShuffleEnabled) {
-      // In shuffle mode, pick a random song
-      if (_songs.length > 1) {
-        int randomIndex;
-        do {
-          randomIndex = Random().nextInt(_songs.length);
-        } while (randomIndex == currentIndex);
-        prevIndex = randomIndex;
-      } else {
-        prevIndex = 0;
-      }
-    } else {
-      // Normal previous logic
-      prevIndex =
-          (currentIndex - 1) < 0 ? _songs.length - 1 : (currentIndex - 1);
-    }
-
-    await playSong(_songs[prevIndex]);
   }
 
   // Add this missing method for adding all songs to playlist
@@ -435,7 +431,10 @@ class PlayerViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    _playbackStateSubscription.cancel();
+    _mediaItemSubscription.cancel();
+    _positionSubscription.cancel();
+    audioHandler.customAction('dispose');
     _yt.close();
     super.dispose();
   }

@@ -2,24 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'viewmodels/player_viewmodel.dart';
 import 'views/player_screen.dart';
+import 'services/audio_handler.dart';
+
+late AudioHandler audioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+
   try {
-    // Initialize background playback
-    await JustAudioBackground.init(
-      androidNotificationChannelId:
-          'com.example.youtube_music_clone.channel.audio',
-      androidNotificationChannelName: 'YouTube Music Clone',
-      androidNotificationOngoing: true,
-      androidNotificationIcon:
-          'mipmap/ic_launcher', // Make sure this resource exists
-      androidShowNotificationBadge: true,
-      notificationColor: Colors.red,
+    // Initialize AudioService with proper configuration
+    audioHandler = await AudioService.init(
+      builder: () => MyAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId:
+            'com.example.youtube_music_clone.channel.audio',
+        androidNotificationChannelName: 'Audio playback',
+        androidNotificationOngoing: true,
+        androidNotificationIcon: 'mipmap/ic_launcher',
+        androidShowNotificationBadge: true,
+        androidStopForegroundOnPause: true,
+        preloadArtwork: false,
+        notificationColor: Color(0xFFFF0000),
+      ),
     );
 
     // Set preferred orientations
